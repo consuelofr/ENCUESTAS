@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
 <script>
 tailwind.config = {
   theme: {
@@ -80,6 +81,15 @@ tailwind.config = {
 </style>
 </head>
 <body>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="position:fixed;inset:0;background:#001430;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
+  <img src="" id="loadingLogo" alt="Sigral" style="height:56px;width:auto;filter:brightness(0) invert(1);opacity:.9;">
+  <div style="width:240px;height:4px;background:rgba(255,255,255,.15);border-radius:9999px;overflow:hidden;">
+    <div id="loadingBar" style="height:100%;background:#3b82f6;border-radius:9999px;width:0%;transition:width .4s ease;"></div>
+  </div>
+  <p id="loadingMsg" style="color:rgba(255,255,255,.6);font-size:13px;font-family:Inter,sans-serif;">Conectando con la base de datos...</p>
+</div>
 
 <!-- Mobile Sidebar Overlay -->
 <div class="mobile-overlay" id="mobileOverlay" onclick="closeSidebar()"></div>
@@ -1942,8 +1952,169 @@ function exportSQL() {
   URL.revokeObjectURL(url);
 }
 
+// ===================== CONFIG =====================
+const GITHUB_SQL_URL = 'https://raw.githubusercontent.com/consuelofr/ENCUESTAS/main/sigral_satisfaccion.sql';
+
+// ===================== SQL LOADER =====================
+function setLoadingProgress(pct, msg) {
+  const bar = document.getElementById('loadingBar');
+  const txt = document.getElementById('loadingMsg');
+  if (bar) bar.style.width = pct + '%';
+  if (txt) txt.textContent = msg;
+}
+
+function hideLoading() {
+  const el = document.getElementById('loadingOverlay');
+  if (el) { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }
+}
+
+async function loadFromGitHub() {
+  // Set logo in loading overlay
+  const logoImg = document.getElementById('loadingLogo');
+  if (logoImg) logoImg.src = document.querySelector('#sidebar img')?.src || '';
+
+  try {
+    setLoadingProgress(10, 'Conectando con GitHub...');
+
+    // Fetch the SQL file
+    const resp = await fetch(GITHUB_SQL_URL + '?t=' + Date.now());
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} — no se pudo descargar el archivo SQL`);
+
+    setLoadingProgress(30, 'Descargando datos...');
+    const sqlText = await resp.text();
+
+    setLoadingProgress(50, 'Inicializando base de datos...');
+
+    // Init sql.js with WASM from CDN
+    const SQL = await initSqlJs({
+      locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${file}`
+    });
+
+    setLoadingProgress(65, 'Procesando base de datos...');
+    const db = new SQL.Database();
+    db.run(sqlText);
+
+    setLoadingProgress(80, 'Cargando encuestas...');
+    loadTableFromDB(db, 'respuestas_raw');
+
+    setLoadingProgress(95, 'Renderizando dashboard...');
+
+    db.close();
+    hideLoading();
+    renderDashboard();
+    populateAnioFilter();
+    populateEmpresaFilter();
+    renderClientes();
+    renderEncuestas();
+
+  } catch (err) {
+    console.error('[SQL Load Error]', err);
+    setLoadingProgress(100, '⚠ ' + err.message);
+    document.getElementById('loadingBar').style.background = '#ef4444';
+    // After 3s fall back to empty dashboard
+    setTimeout(() => {
+      hideLoading();
+      renderDashboard();
+    }, 3000);
+  }
+}
+
+function loadTableFromDB(db, table) {
+  // Check which tables exist
+  const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
+  const tableNames = tables[0]?.values?.map(r => r[0]) || [];
+
+  // ── respuestas_raw → APP.rows + APP.clientes ─────────────────────────────
+  if (tableNames.includes('respuestas_raw')) {
+    const res = db.exec('SELECT * FROM respuestas_raw');
+    if (res.length && res[0].values.length) {
+      const cols = res[0].columns;
+      const idx  = c => cols.indexOf(c);
+      const RESP_OK = new Set(['respondida','recibida','completada','completed']);
+
+      APP.rows = res[0].values.map(row => ({
+        cliente:          row[idx('empresa')]       || '',
+        num:              row[idx('num_proyecto')]  || '',
+        proyecto:         row[idx('proyecto')]      || '',
+        responsable:      row[idx('responsable')]   || '',
+        encuestado:       row[idx('encuestado')]    || '',
+        cargo:            row[idx('cargo')]         || '',
+        correo:           row[idx('correo')]        || '',
+        telefono:         row[idx('telefono')]      || '',
+        fecha_envio:      row[idx('fecha_envio')]   || '',
+        seguimiento:      row[idx('seguimiento')]   || '',
+        estado:           row[idx('estado')]        || '',
+        fecha_recep:      row[idx('fecha_recep')]   || '',
+        sector:           row[idx('sector')]        || '',
+        alcance:          row[idx('alcance')]       || '',
+        cal_servicio:     row[idx('cal_pg')]        || null,
+        cal_p1:           row[idx('cal_p1')]        || null,
+        cal_p2:           row[idx('cal_p2')]        || null,
+        ref_calidad:      !!row[idx('ref_calidad')],
+        ref_comunicacion: !!row[idx('ref_comunicacion')],
+        ref_competencia:  !!row[idx('ref_competencia')],
+        ref_innovacion:   !!row[idx('ref_innovacion')],
+        ref_costos:       !!row[idx('ref_costos')],
+        nps:              row[idx('nps')] !== null ? Number(row[idx('nps')]) : null,
+        comentario:       row[idx('comentario')]    || '',
+      }));
+
+      // Build APP.clientes from respondidas only
+      const rowsResp = APP.rows.filter(r => RESP_OK.has((r.estado||'').toLowerCase().trim()));
+      APP.clientes = rowsResp.map((r, i) => ({
+        id: i+1,
+        cliente:     r.encuestado || r.cliente,
+        empresa:     r.cliente,
+        num:         r.num,
+        proyecto:    r.proyecto,
+        satisfaccion: satTextToNum(r.cal_servicio),
+        cal_servicio: r.cal_servicio || '',
+        nps:          r.nps ?? 0,
+        encuesta:     r.proyecto || r.cliente,
+        estado_enc:   r.estado,
+        sector:       r.sector,
+        alcance:      r.alcance,
+        responsable:  r.responsable,
+        cargo:        r.cargo,
+        correo:       r.correo,
+        telefono:     r.telefono,
+        fecha_envio:  r.fecha_envio,
+        fecha_recep:  r.fecha_recep,
+        comentario:   r.comentario,
+      }));
+      APP.nextId.cli = APP.clientes.length + 1;
+
+      // Build encuesta entry
+      const fechas = APP.rows.map(r => r.fecha_envio).filter(Boolean).sort();
+      const periodo = fechas.length ? `${fechas[0]} — ${fechas[fechas.length-1]}` : 'Importado';
+      APP.encuestas = [{ id:1, titulo:'Base de datos GitHub', periodo, respuestas: rowsResp.length, estado:'Activa' }];
+      APP.nextId.enc = 2;
+    }
+  }
+
+  // ── preguntas (si existe la tabla) ────────────────────────────────────────
+  if (tableNames.includes('preguntas')) {
+    const res = db.exec('SELECT * FROM preguntas');
+    if (res.length && res[0].values.length) {
+      const cols = res[0].columns;
+      const idx  = c => cols.indexOf(c);
+      APP.preguntas = res[0].values.map(row => ({
+        id:          row[idx('id')],
+        pregunta:    row[idx('pregunta')]    || '',
+        descripcion: row[idx('descripcion')] || '',
+        muy_sat:     Number(row[idx('muy_sat')])  || 0,
+        sat:         Number(row[idx('sat')])       || 0,
+        conforme:    Number(row[idx('conforme')])  || 0,
+        insat:       Number(row[idx('insat')])     || 0,
+        muy_ins:     Number(row[idx('muy_ins')])   || 0,
+      }));
+    }
+  }
+}
+
 // ===================== INIT =====================
-renderDashboard();
+// Try to load from GitHub first; fall back to empty state if offline
+loadFromGitHub();
 </script>
 </body>
 </html>
