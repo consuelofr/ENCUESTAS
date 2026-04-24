@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIGRAL SA — Dashboard de Satisfacción</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { manrope: ['Manrope','sans-serif'], inter: ['Inter','sans-serif'] },
+      colors: {
+        primary: '#001430', 'primary-mid': '#002855',
+        success: '#10B981', warning: '#F59E0B', danger: '#EF4444',
+        'chart-blue': '#0b57d0',
+      }
+    }
+  }
+}
+</script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', sans-serif; background: #f4f3f7; color: #1a1c1f; }
+  .font-manrope { font-family: 'Manrope', sans-serif; }
+  .sidebar { width: 260px; transition: transform 0.3s ease; }
+  @media (max-width: 768px) {
+    .sidebar { position: fixed; z-index: 100; transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .main-content { margin-left: 0 !important; }
+  }
+  .sentiment-bar { display: flex; height: 40px; border-radius: 8px; overflow: hidden; }
+  .custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+  .btn-primary { background: #002855; color: #fff; border-radius: 8px; font-weight: 600; transition: background .15s; }
+  .btn-primary:hover { background: #001a3d; }
+  .btn-danger { background: #EF4444; color: #fff; border-radius: 8px; font-weight: 600; transition: background .15s; }
+  .btn-success { background: #10B981; color: #fff; border-radius: 8px; font-weight: 600; transition: background .15s; }
+  .btn-ghost { background: transparent; color: #64748b; border: 1px solid #e2e8f0; border-radius: 8px; font-weight: 600; transition: all .15s; }
+  .btn-ghost:hover { background: #f8fafc; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal-box { background: #fff; border-radius: 16px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,.2); overflow: hidden; }
+  .progress-bar { height: 8px; background: #f1f5f9; border-radius: 9999px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 9999px; transition: width .5s ease; }
+  .table-row:hover { background: #f8fafc; }
+  .tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .tag-promotor { background: #d1fae5; color: #065f46; }
+  .tag-pasivo   { background: #f1f5f9; color: #475569; }
+  .tag-detractor{ background: #fee2e2; color: #991b1b; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; color: #475569; }
+  .nav-item:hover { background: #f1f5f9; color: #002855; }
+  .nav-item.active { background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+  .input-field { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 14px; width: 100%; outline: none; transition: border .15s; }
+  .input-field:focus { border-color: #0b57d0; box-shadow: 0 0 0 3px rgba(11,87,208,.1); }
+  select.input-field { cursor: pointer; }
+  .header-bar { background: #fff; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; z-index: 50; }
+  .tooltip { position: relative; }
+  .tooltip:hover::after { content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; font-size: 11px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; }
+  .nps-ring { transform: rotate(-90deg); }
+  .overlap-bg { position: absolute; inset: 0; background: radial-gradient(circle at 80% 20%, rgba(255,255,255,.06) 0%, transparent 50%); pointer-events: none; }
+  .mobile-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 99; }
+  .mobile-overlay.show { display: block; }
+  .stat-card { background: linear-gradient(135deg, #002855 0%, #001430 100%); color: #fff; border-radius: 16px; position: relative; overflow: hidden; }
+  .fade-in { animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .section-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+  .section-title { font-family: 'Manrope', sans-serif; font-size: 18px; font-weight: 700; color: #0f172a; }
+  .section-sub { font-size: 13px; color: #64748b; margin-top: 2px; }
+  .upload-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 32px; text-align: center; cursor: pointer; transition: all .2s; background: #f8fafc; }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: #0b57d0; background: #eff6ff; }
+  .tab-btn { padding: 6px 16px; font-size: 11px; font-weight: 700; border-radius: 6px; transition: all .15s; color: #64748b; cursor: pointer; }
+  .tab-btn.active { background: #002855; color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+  .search-input { display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; background: #fff; }
+  .search-input input { border: none; outline: none; font-size: 14px; background: transparent; width: 160px; }
+</style>
+</head>
+<body>
+
+<!-- Mobile Sidebar Overlay -->
+<div class="mobile-overlay" id="mobileOverlay" onclick="closeSidebar()"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar fixed left-0 top-0 h-screen bg-white border-r border-slate-200 flex flex-col z-100 overflow-y-auto custom-scrollbar" id="sidebar">
+  <div class="flex items-center gap-3 px-4 py-5 border-b border-slate-100">
+    <div class="w-9 h-9 bg-primary-mid rounded-lg flex items-center justify-center shrink-0">
+      <span class="font-manrope font-black text-white text-sm">S</span>
+    </div>
+    <div>
+      <h2 class="font-manrope font-bold text-primary text-sm leading-tight">SIGRAL SA</h2>
+      <p class="text-[10px] text-slate-400 font-medium mt-0.5">Satisfacción de Clientes</p>
+    </div>
+    <button class="ml-auto md:hidden text-slate-400 hover:text-slate-600" onclick="closeSidebar()">
+      <span class="material-symbols-outlined text-[20px]">close</span>
+    </button>
+  </div>
+
+  <nav class="flex-1 p-3 space-y-1">
+    <div class="nav-item active" onclick="showSection('dashboard')">
+      <span class="material-symbols-outlined text-[20px]">dashboard</span>
+      Dashboard
+    </div>
+    <div class="nav-item" onclick="showSection('encuestas')">
+      <span class="material-symbols-outlined text-[20px]">assignment</span>
+      Encuestas
+    </div>
+    <div class="nav-item" onclick="showSection('clientes')">
+      <span class="material-symbols-outlined text-[20px]">groups</span>
+      Clientes
+    </div>
+    <div class="nav-item" onclick="showSection('preguntas')">
+      <span class="material-symbols-outlined text-[20px]">quiz</span>
+      Preguntas
+    </div>
+    <div class="nav-item" onclick="showSection('importar')">
+      <span class="material-symbols-outlined text-[20px]">upload_file</span>
+      Importar Excel
+    </div>
+  </nav>
+
+  <div class="p-3 border-t border-slate-100 space-y-1">
+    <div class="nav-item">
+      <span class="material-symbols-outlined text-[20px]">help_outline</span>
+      Ayuda
+    </div>
+    <div class="nav-item">
+      <span class="material-symbols-outlined text-[20px]">manage_accounts</span>
+      Mi Cuenta
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main-content" style="margin-left:260px; min-height:100vh;">
+
+  <!-- TOP BAR -->
+  <header class="header-bar px-4 md:px-6 h-14 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <button class="md:hidden p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg" onclick="openSidebar()">
+        <span class="material-symbols-outlined">menu</span>
+      </button>
+      <h1 class="font-manrope font-bold text-slate-800 text-base md:text-lg" id="pageTitle">Dashboard</h1>
+    </div>
+    <div class="flex items-center gap-1 md:gap-2">
+      <div class="search-input hidden md:flex">
+        <span class="material-symbols-outlined text-[18px] text-slate-400">search</span>
+        <input type="text" placeholder="Buscar..." oninput="globalSearch(this.value)">
+      </div>
+      <button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full tooltip" data-tip="Exportar" onclick="exportData()">
+        <span class="material-symbols-outlined text-[20px]">download</span>
+      </button>
+      <button class="p-2 text-slate-500 hover:bg-slate-100 rounded-full tooltip" data-tip="Notificaciones">
+        <span class="material-symbols-outlined text-[20px]">notifications</span>
+      </button>
+      <div class="w-8 h-8 rounded-full bg-primary-mid flex items-center justify-center text-white text-xs font-bold cursor-pointer">AD</div>
+    </div>
+  </header>
+
+  <!-- CONTENT AREA -->
+  <main class="p-4 md:p-6 space-y-6 fade-in" id="mainContent">
+
+    <!-- ===================== DASHBOARD ===================== -->
+    <section id="sec-dashboard">
+      <div class="flex items-center justify-between mb-2 flex-wrap gap-3">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-widest text-blue-600 mb-1">Análisis General</p>
+          <h2 class="font-manrope font-extrabold text-xl md:text-2xl text-slate-900">Resultados Encuestas de Satisfacción</h2>
+        </div>
+        <!-- Selector de Periodo -->
+        <div class="relative" id="periodoWrapper">
+          <button onclick="togglePeriodoMenu()" class="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-600 shadow-sm hover:border-blue-400 hover:text-blue-600 transition-colors shrink-0">
+            <span class="material-symbols-outlined text-[14px] text-slate-400">calendar_today</span>
+            <span id="periodoLabel">Todos los periodos</span>
+            <span class="material-symbols-outlined text-[14px] text-slate-400" id="periodoChevron">expand_more</span>
+          </button>
+          <!-- Dropdown -->
+          <div id="periodoMenu" class="hidden absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 min-w-[220px] overflow-hidden">
+            <div class="px-3 py-2 border-b border-slate-100">
+              <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Filtrar por periodo de recepción</p>
+            </div>
+            <div id="periodoOptions" class="max-h-64 overflow-y-auto custom-scrollbar py-1">
+              <!-- opciones generadas por JS -->
+            </div>
+            <div class="px-3 py-2 border-t border-slate-100">
+              <button onclick="setPeriodo('all')" class="w-full text-left text-xs text-blue-600 font-bold hover:text-blue-800 flex items-center gap-1">
+                <span class="material-symbols-outlined text-[14px]">restart_alt</span>Mostrar todos los periodos
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="card p-4">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Enc. Respondidas</p>
+          <p class="font-manrope font-black text-2xl text-primary" id="kpi-total">0</p>
+          <p class="text-[11px] text-slate-500 mt-1">respuestas recibidas</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Satisfacción</p>
+          <p class="font-manrope font-black text-2xl text-emerald-600" id="kpi-sat">0%</p>
+          <p class="text-[11px] text-slate-500 mt-1">promedio global</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">NPS Score</p>
+          <p class="font-manrope font-black text-2xl text-blue-600" id="kpi-nps">0</p>
+          <p class="text-[11px] text-slate-500 mt-1">net promoter</p>
+        </div>
+        <div class="card p-4">
+          <p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Promotores</p>
+          <p class="font-manrope font-black text-2xl text-emerald-600" id="kpi-prom">0%</p>
+          <p class="text-[11px] text-slate-500 mt-1">de encuestados</p>
+        </div>
+      </div>
+
+      <!-- Main Stats Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Satisfaction Bar -->
+        <div class="card p-6 lg:col-span-2">
+          <div class="section-header">
+            <div>
+              <div class="section-title">Satisfacción General del Servicio</div>
+              <div class="section-sub">¿Cómo calificaría el servicio recibido?</div>
+            </div>
+          </div>
+          <div class="sentiment-bar mb-3" id="sentimentBar">
+            <div style="background:#ef4444;width:5%"></div>
+            <div style="background:#f97316;width:10%"></div>
+            <div style="background:#eab308;width:25%"></div>
+            <div style="background:#84cc16;width:40%"></div>
+            <div style="background:#22c55e;width:20%"></div>
+          </div>
+          <div class="flex justify-between text-[10px] font-bold text-slate-400" id="sentimentLabels">
+            <div class="flex flex-col items-center" style="width:5%"><span class="text-red-500 mb-0.5" id="s1">5%</span><span>Muy Insat.</span></div>
+            <div class="flex flex-col items-center" style="width:10%"><span class="text-orange-500 mb-0.5" id="s2">10%</span><span>Insat.</span></div>
+            <div class="flex flex-col items-center" style="width:25%"><span class="text-yellow-600 mb-0.5" id="s3">25%</span><span>Conforme</span></div>
+            <div class="flex flex-col items-center" style="width:40%"><span class="text-lime-600 mb-0.5" id="s4">40%</span><span>Satisfecho</span></div>
+            <div class="flex flex-col items-center" style="width:20%"><span class="text-green-600 mb-0.5" id="s5">20%</span><span>Muy Sat.</span></div>
+          </div>
+        </div>
+
+        <!-- ISN Card -->
+        <div class="stat-card p-6 text-white">
+          <div class="overlap-bg"></div>
+          <div class="relative">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-white/50 mb-2">Índice de Satisfacción</p>
+            <div class="flex items-center gap-3 mb-1">
+              <span class="font-manrope font-black text-4xl" id="isn-value">78.4</span>
+              <div class="bg-white/10 border border-white/20 rounded px-2 py-1 text-[10px] font-bold">
+                Meta: <span id="isn-meta">85%</span>
+              </div>
+            </div>
+            <p class="text-sm text-white/70 mb-6">Índice de Satisfacción Neto</p>
+            <div class="space-y-3 pt-5 border-t border-white/10">
+              <div class="flex justify-between text-sm">
+                <span class="text-white/60">Encuestas Respondidas</span>
+                <span class="font-bold" id="isn-total">0</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-white/60">Tasa de Respuesta</span>
+                <span class="font-bold" id="isn-tasa">—</span>
+              </div>
+              <div class="flex justify-between text-sm">
+                <span class="text-white/60">Encuestas Emitidas</span>
+                <span class="font-bold" id="isn-clientes">0</span>
+              </div>
+            </div>
+          </div>
+          <div class="absolute -right-6 -top-6 w-24 h-24 bg-white/5 rounded-full pointer-events-none"></div>
+        </div>
+      </div>
+
+      <!-- Preguntas por categoría (solo las 2 preguntas específicas) -->
+      <div>
+        <div class="section-header">
+          <div>
+            <div class="section-title">Resultados por Pregunta</div>
+            <div class="section-sub">Distribución de respuestas por categoría de evaluación</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="preguntasGrid"><!-- filled by JS --></div>
+      </div>
+
+      <!-- NPS Section -->
+      <div class="card p-6">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Análisis NPS</div>
+            <div class="section-sub" id="npsSubtitle">Monitoreo de la fidelización del cliente</div>
+          </div>
+          <div class="flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 gap-0.5">
+            <div class="tab-btn active" onclick="setNpsTab(this,'30d')">30 días</div>
+            <div class="tab-btn" onclick="setNpsTab(this,'q')">Trimestre</div>
+            <div class="tab-btn" onclick="setNpsTab(this,'y')">Año</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <!-- Ring -->
+          <div class="flex flex-col items-center">
+            <div class="relative" style="width:200px;height:200px;">
+              <svg class="nps-ring w-full h-full" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#f1f5f9" stroke-width="10"/>
+                <circle cx="50" cy="50" r="40" fill="transparent" stroke="#002855" stroke-width="10" stroke-linecap="round"
+                  id="npsRing" stroke-dasharray="163 251"/>
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span class="font-manrope font-black text-3xl text-slate-900" id="npsRingVal">—</span>
+                <span class="text-xs font-bold flex items-center gap-1 mt-1" id="npsVariacion" style="display:none!important"></span>
+              </div>
+            </div>
+            <div class="flex justify-around w-full mt-4 text-center">
+              <div><p class="text-[9px] font-bold uppercase text-slate-400 tracking-widest">Mínimo</p><p class="text-sm font-bold text-slate-700">-100</p></div>
+              <div><p class="text-[9px] font-bold uppercase text-slate-400 tracking-widest">Meta</p><p class="text-sm font-bold text-slate-700" id="npsMeta">40</p></div>
+              <div><p class="text-[9px] font-bold uppercase text-slate-400 tracking-widest">Máximo</p><p class="text-sm font-bold text-slate-700">100</p></div>
+            </div>
+          </div>
+          <!-- Breakdown -->
+          <div class="space-y-5">
+            <div>
+              <p class="text-sm font-bold text-slate-800 mb-1">Desglose de Categorías</p>
+              <p class="text-[11px] text-slate-400 mb-4">Clasificación de respuestas (N=<span id="npsN">1,248</span>)</p>
+              <div class="space-y-4" id="npsBreakdown">
+                <div>
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="flex items-center gap-2 font-semibold text-slate-700"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>Promotores (9-10)</span>
+                    <span class="font-bold text-emerald-600" id="prom-pct">72%</span>
+                  </div>
+                  <div class="progress-bar"><div class="progress-fill bg-emerald-500" id="prom-bar" style="width:72%"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="flex items-center gap-2 font-semibold text-slate-700"><span class="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>Pasivos (7-8)</span>
+                    <span class="font-bold text-slate-600" id="pas-pct">18%</span>
+                  </div>
+                  <div class="progress-bar"><div class="progress-fill bg-slate-400" id="pas-bar" style="width:18%"></div></div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-xs mb-1">
+                    <span class="flex items-center gap-2 font-semibold text-slate-700"><span class="w-2.5 h-2.5 rounded-full bg-red-500 inline-block"></span>Detractores (0-6)</span>
+                    <span class="font-bold text-red-600" id="det-pct">10%</span>
+                  </div>
+                  <div class="progress-bar"><div class="progress-fill bg-red-500" id="det-bar" style="width:10%"></div></div>
+                </div>
+              </div>
+            </div>
+            <!-- Scale bars -->
+            <div class="pt-4 border-t border-slate-100">
+              <p class="text-sm font-bold text-slate-800 mb-3">Distribución de la Escala</p>
+              <div class="flex items-end gap-1 h-16" id="scaleBars">
+                <!-- generated by JS -->
+              </div>
+              <div class="flex justify-between text-[9px] font-bold text-slate-400 mt-1">
+                <span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Benchmarking -->
+      <div class="card p-6">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Características a reforzar vs. competencia</div>
+            <div class="section-sub">% por áreas de mejora según clientes encuestados</div>
+          </div>
+          <span class="text-[11px] font-bold uppercase tracking-wider bg-slate-100 border border-slate-200 text-slate-600 px-3 py-1 rounded">Benchmarking</span>
+        </div>
+        <div class="space-y-5" id="benchmarkList"><!-- filled by JS --></div>
+      </div>
+    </section>
+
+    <!-- ===================== ENCUESTAS ===================== -->
+    <section id="sec-encuestas" class="hidden">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="section-title">Encuestas</div>
+          <div class="section-sub">Gestión completa de encuestas de satisfacción</div>
+        </div>
+        <button class="btn-primary px-4 py-2 text-sm flex items-center gap-2" onclick="openModal('enc')">
+          <span class="material-symbols-outlined text-[18px]">add</span>Nueva Encuesta
+        </button>
+      </div>
+      <div class="card overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+          <div class="search-input flex-1" style="min-width:180px;">
+            <span class="material-symbols-outlined text-[16px] text-slate-400">search</span>
+            <input type="text" placeholder="Buscar encuesta..." oninput="filterTable('encTable',this.value)">
+          </div>
+        </div>
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full text-left" id="encTable">
+            <thead>
+              <tr class="border-b border-slate-100 bg-slate-50">
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">ID</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Título</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Período</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Respuestas</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Estado</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody id="encBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== CLIENTES ===================== -->
+    <section id="sec-clientes" class="hidden">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="section-title">Resultados por Cliente</div>
+          <div class="section-sub">Análisis individual de satisfacción y NPS</div>
+        </div>
+        <button class="btn-primary px-4 py-2 text-sm flex items-center gap-2" onclick="openModal('cli')">
+          <span class="material-symbols-outlined text-[18px]">person_add</span>Agregar
+        </button>
+      </div>
+      <div class="card overflow-hidden">
+        <div class="p-4 border-b border-slate-100 flex items-center gap-3 flex-wrap">
+          <div class="search-input flex-1" style="min-width:180px;">
+            <span class="material-symbols-outlined text-[16px] text-slate-400">search</span>
+            <input type="text" placeholder="Buscar encuestado, proyecto..." id="cliSearchInput" oninput="applyCliFilters()">
+          </div>
+          <select class="input-field" style="width:auto;min-width:90px;" id="cliAnioFilter" onchange="applyCliFilters()">
+            <option value="">Todos los años</option>
+          </select>
+          <select class="input-field" style="width:auto;min-width:160px;" id="cliEmpresaFilter" onchange="applyCliFilters()">
+            <option value="">Todas las empresas</option>
+          </select>
+          <select class="input-field" style="width:auto;" id="cliStatusFilter" onchange="applyCliFilters()">
+            <option value="">Todos los estados</option>
+            <option value="Promotor">Promotores</option>
+            <option value="Pasivo">Pasivos</option>
+            <option value="Detractor">Detractores</option>
+          </select>
+          <button class="btn-ghost px-3 py-2 text-xs flex items-center gap-1" onclick="clearCliFilters()">
+            <span class="material-symbols-outlined text-[15px]">filter_alt_off</span>Limpiar
+          </button>
+        </div>
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full text-left" id="cliTable">
+            <thead>
+              <tr class="border-b border-slate-100 bg-slate-50">
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Cliente</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Satisfacción</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">NPS (0-10)</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Estado</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">N° · Proyecto</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Comentarios</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody id="cliBody"></tbody>
+          </table>
+        </div>
+        <div class="p-4 border-t border-slate-100 flex justify-between items-center">
+          <p class="text-xs text-slate-500 italic" id="cliCount">Mostrando 0 clientes</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== PREGUNTAS ===================== -->
+    <section id="sec-preguntas" class="hidden">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="section-title">Preguntas de Encuesta</div>
+          <div class="section-sub">Gestión de preguntas y resultados por categoría</div>
+        </div>
+        <button class="btn-primary px-4 py-2 text-sm flex items-center gap-2" onclick="openModal('preg')">
+          <span class="material-symbols-outlined text-[18px]">add</span>Nueva Pregunta
+        </button>
+      </div>
+      <div class="card overflow-hidden">
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full text-left" id="pregTable">
+            <thead>
+              <tr class="border-b border-slate-100 bg-slate-50">
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">#</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Pregunta</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Descripción</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Muy Sat.</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Sat.</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Conf.</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Insat.</th>
+                <th class="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">Muy Ins.</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody id="pregBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== IMPORTAR ===================== -->
+    <section id="sec-importar" class="hidden">
+      <div class="mb-4">
+        <div class="section-title">Importar datos desde Excel</div>
+        <div class="section-sub">Carga tu archivo .xlsx o .xls y los datos se integrarán automáticamente</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Upload area -->
+        <div class="card p-6">
+          <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-blue-600">upload_file</span>
+            Cargar Archivo
+          </h3>
+          <label class="upload-zone block" id="dropZone">
+            <input type="file" accept=".xlsx,.xls,.csv" class="hidden" id="fileInput" onchange="handleFile(this.files[0])">
+            <span class="material-symbols-outlined text-[40px] text-slate-300 block mb-3">cloud_upload</span>
+            <p class="font-bold text-slate-600 mb-1">Arrastra tu archivo aquí</p>
+            <p class="text-sm text-slate-400 mb-4">o haz clic para seleccionar</p>
+            <span class="btn-primary px-4 py-2 text-sm inline-block">Seleccionar archivo</span>
+            <p class="text-[11px] text-slate-400 mt-3">Formatos: .xlsx, .xls, .csv</p>
+          </label>
+          <div id="fileStatus" class="hidden mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-sm flex items-center gap-2">
+            <span class="material-symbols-outlined">check_circle</span>
+            <span id="fileStatusMsg"></span>
+          </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="card p-6">
+          <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-amber-500">info</span>
+            Formato Esperado
+          </h3>
+          <p class="text-sm text-slate-600 mb-4">La aplicación reconoce automáticamente el formato SIGRAL. Tu archivo debe tener una hoja llamada <strong>Encuestas</strong> con esta estructura:</p>
+          <div class="space-y-3">
+            <div class="bg-slate-50 rounded-lg p-3 text-xs">
+              <p class="font-bold text-slate-700 mb-1">Columnas requeridas (en orden)</p>
+              <p class="text-slate-500 font-mono leading-relaxed">CLIENTE · Nº · PROYECTO · RESPONSABLE · ENCUESTADO · CARGO · CORREO · TELÉFONO · FECHA DE ENVÍO · SEGUIMIENTO · ESTADO ENCUESTA · FECHA RECEPCIÓN · SECTOR · ALCANCE DEL SERVICIO</p>
+            </div>
+            <div class="bg-emerald-50 rounded-lg p-3 text-xs border border-emerald-200">
+              <p class="font-bold text-emerald-700 mb-1">✓ Calificaciones (texto)</p>
+              <p class="text-emerald-600 font-mono">¿Cómo calificaría el servicio? · Competencia técnica... · Calidad y oportunidad...</p>
+              <p class="text-emerald-500 mt-1">Valores válidos: <em>Muy Satisfecho / Satisfecho / Conforme / Insatisfecho / Muy Insatisfecho</em></p>
+            </div>
+            <div class="bg-blue-50 rounded-lg p-3 text-xs border border-blue-200">
+              <p class="font-bold text-blue-700 mb-1">✓ Características a reforzar (X o vacío)</p>
+              <p class="text-blue-600 font-mono">Calidad entregables · Comunicación efectiva · Competencia equipo · Innovación · Menores costos</p>
+            </div>
+            <div class="bg-amber-50 rounded-lg p-3 text-xs border border-amber-200">
+              <p class="font-bold text-amber-700 mb-1">✓ NPS (número 0-10)</p>
+              <p class="text-amber-600 font-mono">¿Qué probabilidades hay de que recomiende nuestro servicio?</p>
+              <p class="text-amber-500 mt-1">0-6 = Detractor · 7-8 = Pasivo · 9-10 = Promotor</p>
+            </div>
+          </div>
+          <button class="mt-4 btn-ghost px-4 py-2 text-sm w-full" onclick="loadSampleData()">
+            <span class="material-symbols-outlined text-[16px] mr-1">table_chart</span>
+            Cargar datos de ejemplo
+          </button>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div class="card p-6" id="previewSection" style="display:none;">
+        <h3 class="font-bold text-slate-800 mb-4">Vista previa de datos importados</h3>
+        <div class="overflow-x-auto custom-scrollbar" id="previewContent"></div>
+        <div class="mt-4 flex gap-3">
+          <button class="btn-primary px-4 py-2 text-sm" onclick="applyImport()">Aplicar importación</button>
+          <button class="btn-ghost px-4 py-2 text-sm" onclick="cancelImport()">Cancelar</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ======= MODALS ======= -->
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal-box">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <h3 class="font-manrope font-bold text-slate-900 text-lg" id="modalTitle">Modal</h3>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="p-6 space-y-4" id="modalBody"></div>
+    <div class="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+      <button class="btn-ghost px-4 py-2 text-sm" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary px-4 py-2 text-sm" id="modalSaveBtn" onclick="saveModal()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div class="modal-overlay hidden" id="confirmOverlay">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="p-6 text-center">
+      <span class="material-symbols-outlined text-[48px] text-red-500 mb-3 block">delete_forever</span>
+      <h3 class="font-bold text-slate-900 text-lg mb-2">¿Eliminar registro?</h3>
+      <p class="text-slate-500 text-sm mb-6" id="confirmMsg">Esta acción no se puede deshacer.</p>
+      <div class="flex gap-3">
+        <button class="btn-ghost flex-1 py-2 text-sm" onclick="closeConfirm()">Cancelar</button>
+        <button class="btn-danger flex-1 py-2 text-sm" id="confirmOkBtn">Eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== DATA STORE =====================
+let APP = {
+  rows: [], // filas crudas importadas desde Excel (formato SIGRAL)
+  filtroPeriodo: 'all', // 'all' | 'YYYY' (año) | 'YYYY-MM' (mes)
+  filtroAnioExpand: null, // año expandido en el menú
+  npsTab: '30d', // '30d' | 'q' | 'y'
+  encuestas: [
+    { id:1, titulo:'Encuesta Q4 2023', periodo:'Oct 2023 - Dic 2023', respuestas:580, estado:'Cerrada' },
+    { id:2, titulo:'Encuesta Q1 2024', periodo:'Ene 2024 - Mar 2024', respuestas:668, estado:'Activa' },
+  ],
+  clientes: [
+    { id:1, cliente:'Luis Fernandez', satisfaccion:92, nps:9, encuesta:'Encuesta Q4 2023' },
+    { id:2, cliente:'Teresa Ilay', satisfaccion:78, nps:7, encuesta:'Encuesta Q4 2023' },
+    { id:3, cliente:'Mega Sole', satisfaccion:45, nps:4, encuesta:'Encuesta Q1 2024' },
+    { id:4, cliente:'Diana Almeda', satisfaccion:88, nps:10, encuesta:'Encuesta Q1 2024' },
+  ],
+  preguntas: [
+    { id:1, pregunta:'Competencia, compromiso, comunicaciones', descripcion:'Competencia técnica, compromiso y claridad en comunicaciones', muy_sat:15, sat:45, conforme:25, insat:10, muy_ins:5 },
+    { id:2, pregunta:'Entregables, tiempos de respuesta', descripcion:'Calidad y oportunidad de entregables, tiempos de respuesta', muy_sat:28, sat:32, conforme:22, insat:12, muy_ins:6 },
+    { id:3, pregunta:'Innovación y herramientas digitales', descripcion:'Uso de tecnologías modernas y soluciones innovadoras', muy_sat:20, sat:38, conforme:28, insat:9, muy_ins:5 },
+  ],
+  benchmark: [
+    { label:'Calidad y oportunidad de entregables', val:88 },
+    { label:'Comunicación efectiva', val:84 },
+    { label:'Competencia y compromiso del equipo', val:79 },
+    { label:'Innovación y uso de herramientas digitales', val:72 },
+    { label:'Menores costos', val:45, muted:true },
+  ],
+  nps: { promotores:72, pasivos:18, detractores:10, meta:40 },
+  satisfaction: { muy_ins:5, insat:10, conforme:25, sat:40, muy_sat:20 },
+  nextId: { enc:3, cli:5, preg:4 },
+};
+
+let currentModal = null;
+let editingId = null;
+let pendingImport = null;
+let deleteCallback = null;
+
+// ===================== NAVIGATION =====================
+function showSection(name) {
+  ['dashboard','encuestas','clientes','preguntas','importar'].forEach(s => {
+    document.getElementById('sec-'+s).classList.add('hidden');
+  });
+  document.getElementById('sec-'+name).classList.remove('hidden');
+
+  const titles = { dashboard:'Dashboard', encuestas:'Encuestas', clientes:'Clientes', preguntas:'Preguntas', importar:'Importar Excel' };
+  document.getElementById('pageTitle').textContent = titles[name];
+
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'encuestas') renderEncuestas();
+  if (name === 'clientes') { populateAnioFilter(); populateEmpresaFilter(); renderClientes(); }
+  if (name === 'preguntas') renderPreguntas();
+  closeSidebar();
+}
+
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('mobileOverlay').classList.add('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobileOverlay').classList.remove('show');
+}
+
+// ===================== HELPER: número de satisfacción → texto =====================
+function satNumToText(pct) {
+  if (pct >= 90) return 'Muy Satisfecho';
+  if (pct >= 70) return 'Satisfecho';
+  if (pct >= 50) return 'Conforme';
+  if (pct >= 30) return 'Insatisfecho';
+  return 'Muy Insatisfecho';
+}
+
+// ===================== HELPER: calcular satisfacción desde texto =====================
+// Índice de Satisfacción = % Conforme + % Satisfecho + % Muy Satisfecho
+const SAT_SCORE = { 'Muy Satisfecho':5, 'Satisfecho':4, 'Conforme':3, 'Insatisfecho':2, 'Muy Insatisfecho':1 };
+const SAT_POSITIVE = new Set(['Conforme','Satisfecho','Muy Satisfecho']);
+
+function calcSatisfaccionFromRows(rows) {
+  // rows es array de filas crudas con campo cal_servicio (texto)
+  const validas = rows.filter(r => r.cal_servicio && SAT_SCORE[r.cal_servicio]);
+  if (!validas.length) return 0;
+  const positivas = validas.filter(r => SAT_POSITIVE.has(r.cal_servicio)).length;
+  return Math.round((positivas / validas.length) * 100);
+}
+
+function calcSatisfaccionDistribucion(rows, campo) {
+  const validas = rows.filter(r => r[campo] && SAT_SCORE[r[campo]]);
+  const n = validas.length || 1;
+  return {
+    muy_sat:  Math.round(validas.filter(r=>r[campo]==='Muy Satisfecho').length  / n * 100),
+    sat:      Math.round(validas.filter(r=>r[campo]==='Satisfecho').length       / n * 100),
+    conforme: Math.round(validas.filter(r=>r[campo]==='Conforme').length         / n * 100),
+    insat:    Math.round(validas.filter(r=>r[campo]==='Insatisfecho').length      / n * 100),
+    muy_ins:  Math.round(validas.filter(r=>r[campo]==='Muy Insatisfecho').length  / n * 100),
+  };
+}
+
+function calcNPS(rows) {
+  // NPS = (%Promotores 9-10) - (%Detractores 0-6)
+  const validas = rows.filter(r => r.nps !== null && r.nps !== undefined && r.nps !== '' && !isNaN(r.nps));
+  const n = validas.length;
+  if (!n) return { nps: 0, promotores: 0, pasivos: 0, detractores: 0, n: 0 };
+  const proms = validas.filter(r => Number(r.nps) >= 9).length;
+  const pasiv = validas.filter(r => Number(r.nps) >= 7 && Number(r.nps) <= 8).length;
+  const dets  = validas.filter(r => Number(r.nps) <= 6).length;
+  return {
+    nps: Math.round((proms - dets) / n * 100),
+    promotores:  Math.round(proms / n * 100),
+    pasivos:     Math.round(pasiv / n * 100),
+    detractores: Math.round(dets  / n * 100),
+    n,
+  };
+}
+
+// ===================== DASHBOARD =====================
+function renderDashboard() {
+  // Usamos APP.rows (filas crudas) si están disponibles, si no usamos APP.clientes (legado)
+  const rows = APP.rows && APP.rows.length ? APP.rows : APP.clientes.map(c => ({
+    cal_servicio: satNumToText(c.satisfaccion),
+    cal_p1: satNumToText(c.satisfaccion),
+    cal_p2: satNumToText(c.satisfaccion),
+    nps: c.nps,
+    cliente: c.cliente,
+    estado: 'Respondida', // datos manuales → siempre respondida
+  }));
+
+  // Estados que califican como "respondida" — comparación EXACTA (no includes)
+  const RESP_EXACTOS = new Set(['respondida', 'recibida', 'completada', 'completed']);
+
+  const isRespondida = (r) => {
+    const e = String(r.estado || '').toLowerCase().trim();
+    return RESP_EXACTOS.has(e);  // exacto: "no respondida" ≠ "respondida"
+  };
+
+  const emitidas    = rows.length;
+  const respondidas = rows.filter(isRespondida).length;
+  const tasaResp    = emitidas > 0 ? Math.round(respondidas / emitidas * 100) : 0;
+
+  // Solo las filas respondidas se usan para ISG y NPS
+  const rowsResp = rows.filter(isRespondida);
+
+  // ---- ISG: Índice de Satisfacción General (solo sobre respondidas) ----
+  const isg = calcSatisfaccionFromRows(rowsResp);
+
+  // ---- NPS (solo sobre respondidas) ----
+  const npsData = calcNPS(rowsResp);
+
+  // ---- Distribución general (col 14 = ¿Cómo calificaría el servicio?, solo respondidas) ----
+  const dist = calcSatisfaccionDistribucion(rowsResp, 'cal_servicio');
+
+  // ── Periodo: construir catálogo de años y meses disponibles ──────────────
+  const fmtMes  = iso => { try { return new Date(iso+'T00:00:00').toLocaleDateString('es-PE',{month:'short',year:'numeric'}); } catch(e){ return iso; } };
+  const isoMes  = iso => iso ? String(iso).slice(0,7) : null;
+  const isoAnio = iso => iso ? String(iso).slice(0, 4) : null;
+
+  // Catálogo de años → meses: basado en fecha_envio de TODAS las emitidas
+  // (así el menú muestra los periodos donde hay encuestas, no solo las respondidas)
+  const catalogo = {}; // { 'YYYY': Set(['YYYY-MM', ...]) }
+  rows.forEach(r => {
+    const fechaRef = r.fecha_envio || r.fecha_recep || '';
+    const a = isoAnio(fechaRef);
+    const m = isoMes(fechaRef);
+    if (a) {
+      if (!catalogo[a]) catalogo[a] = new Set();
+      if (m) catalogo[a].add(m);
+    }
+  });
+  const aniosDisp = Object.keys(catalogo).sort();
+
+  // Aplicar filtro de periodo al rowsResp
+  let rowsFiltrados = rowsResp;
+  if (APP.filtroPeriodo !== 'all' && APP.filtroPeriodo) {
+    if (APP.filtroPeriodo.length === 4) {
+      // Filtro por año: respondidas según fecha_recep
+      rowsFiltrados = rowsResp.filter(r => isoAnio(r.fecha_recep) === APP.filtroPeriodo);
+    } else {
+      // Filtro por mes: respondidas según fecha_recep
+      rowsFiltrados = rowsResp.filter(r => isoMes(r.fecha_recep) === APP.filtroPeriodo);
+    }
+  }
+
+  // Emitidas en el mismo periodo: usar fecha_envio (todas las filas la tienen,
+  // incluso las enviadas/no respondidas que no tienen fecha_recep)
+  let emitidasFiltro = emitidas;
+  if (APP.filtroPeriodo !== 'all') {
+    if (APP.filtroPeriodo.length === 4) {
+      // Filtro por año: contar emitidas cuya fecha_envio corresponde a ese año
+      // Si no tienen fecha_envio, usar fecha_recep como fallback
+      emitidasFiltro = rows.filter(r => {
+        const fechaRef = r.fecha_envio || r.fecha_recep || '';
+        return isoAnio(fechaRef) === APP.filtroPeriodo;
+      }).length;
+    } else {
+      // Filtro por mes: usar fecha_envio para emitidas, fecha_recep para respondidas
+      // El mes del filtro aplica al año-mes de la fecha de envío
+      emitidasFiltro = rows.filter(r => {
+        const fechaRef = r.fecha_envio || r.fecha_recep || '';
+        return isoMes(fechaRef) === APP.filtroPeriodo;
+      }).length;
+      // Para el mes, también refiltramos respondidas: las recibidas en ese mes
+      // ya está correcto arriba (usa fecha_recep)
+    }
+  }
+  const respondidasFiltro = rowsFiltrados.length;
+  const tasaFiltro = emitidasFiltro > 0 ? Math.round(respondidasFiltro / emitidasFiltro * 100) : 0;
+
+  // Recalcular métricas sobre el subconjunto filtrado
+  const isgF  = calcSatisfaccionFromRows(rowsFiltrados);
+  const npsF  = calcNPS(rowsFiltrados);
+  const distF = calcSatisfaccionDistribucion(rowsFiltrados, 'cal_servicio');
+
+  // KPIs
+  document.getElementById('kpi-total').textContent = respondidasFiltro.toLocaleString();
+  document.getElementById('kpi-sat').textContent   = isgF + '%';
+  document.getElementById('kpi-nps').textContent   = npsF.nps;
+  document.getElementById('kpi-prom').textContent  = npsF.promotores + '%';
+  document.getElementById('isn-value').textContent  = isgF;
+  document.getElementById('isn-total').textContent  = respondidasFiltro.toLocaleString();
+  document.getElementById('isn-tasa').textContent   = tasaFiltro + '%';
+  document.getElementById('isn-clientes').textContent = emitidasFiltro.toLocaleString();
+
+  // ── Etiqueta del botón ────────────────────────────────────────────────────
+  const fmtAnio = a => a;
+  if (APP.filtroPeriodo === 'all') {
+    if (aniosDisp.length >= 2) {
+      document.getElementById('periodoLabel').textContent = `${aniosDisp[0]} — ${aniosDisp[aniosDisp.length-1]}`;
+    } else if (aniosDisp.length === 1) {
+      const meses = [...catalogo[aniosDisp[0]]].sort();
+      if (meses.length >= 2)
+        document.getElementById('periodoLabel').textContent = `${fmtMes(meses[0]+'-01')} — ${fmtMes(meses[meses.length-1]+'-01')}`;
+      else
+        document.getElementById('periodoLabel').textContent = aniosDisp[0] || 'Todos los periodos';
+    } else {
+      document.getElementById('periodoLabel').textContent = 'Todos los periodos';
+    }
+  } else if (APP.filtroPeriodo.length === 4) {
+    document.getElementById('periodoLabel').textContent = APP.filtroPeriodo;
+  } else {
+    document.getElementById('periodoLabel').textContent = fmtMes(APP.filtroPeriodo + '-01') || APP.filtroPeriodo;
+  }
+
+  // ── Menú agrupado por año → meses ─────────────────────────────────────────
+  const opts = document.getElementById('periodoOptions');
+  if (opts) {
+    // Si no hay año expandido, expandir el que coincide con el filtro activo
+    if (!APP.filtroAnioExpand && APP.filtroPeriodo !== 'all') {
+      APP.filtroAnioExpand = APP.filtroPeriodo.slice(0, 4);
+    }
+
+    opts.innerHTML = aniosDisp.map(anio => {
+      const mesesDelAnio = [...catalogo[anio]].sort();
+      // Emitidas del año (por fecha_envio), respondidas del año (por fecha_recep)
+      const emitAnio  = rows.filter(r => isoAnio(r.fecha_envio || r.fecha_recep || '') === anio).length;
+      const respAnio  = rowsResp.filter(r => isoAnio(r.fecha_recep) === anio).length;
+      const activeAnio = APP.filtroPeriodo === anio;
+      const expanded   = APP.filtroAnioExpand === anio;
+
+      const mesRows = mesesDelAnio.map(m => {
+        const label    = fmtMes(m + '-01');
+        const emitMes  = rows.filter(r => isoMes(r.fecha_envio || r.fecha_recep || '') === m).length;
+        const respMes  = rowsResp.filter(r => isoMes(r.fecha_recep) === m).length;
+        const active   = APP.filtroPeriodo === m;
+        return `<button onclick="setPeriodo('${m}')" class="w-full text-left pl-8 pr-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-slate-50 ${active ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600'}">
+          <span class="flex items-center gap-2">
+            ${active ? '<span class="material-symbols-outlined text-[13px]">check</span>' : '<span class="w-[13px]"></span>'}
+            ${label}
+          </span>
+          <span class="text-[10px] font-bold px-1.5 py-0.5 rounded" style="background:#f1f5f9;color:#64748b" title="Respondidas / Emitidas">${respMes}/${emitMes}</span>
+        </button>`;
+      }).join('');
+
+      return `
+        <div>
+          <button onclick="toggleAnio('${anio}')" class="w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-50 ${activeAnio ? 'text-blue-700 font-bold' : 'text-slate-700 font-semibold'}" style="font-size:13px">
+            <span class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[15px] text-slate-400">${expanded ? 'expand_less' : 'expand_more'}</span>
+              <span class="material-symbols-outlined text-[15px] text-slate-400">calendar_month</span>
+              ${anio}
+            </span>
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded" style="background:#eff6ff;color:#2563eb" title="Respondidas / Emitidas">${respAnio}/${emitAnio}</span>
+              <button onclick="event.stopPropagation();setPeriodo('${anio}')" class="text-[10px] px-2 py-0.5 rounded font-bold border transition-colors ${activeAnio ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200 text-slate-500 hover:border-blue-400 hover:text-blue-600'}">Ver año</button>
+            </div>
+          </button>
+          ${expanded ? `<div class="border-l-2 border-slate-100 ml-5">${mesRows}</div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  // Variables para uso posterior en gráficas
+  const distRender = distF;
+  const npsRender  = npsF;
+  const rowsRender = rowsFiltrados;
+
+  // ---- Satisfaction bar ----
+  const colors = ['#ef4444','#f97316','#eab308','#84cc16','#22c55e'];
+  const pcts = [distRender.muy_ins, distRender.insat, distRender.conforme, distRender.sat, distRender.muy_sat];
+  document.getElementById('sentimentBar').innerHTML = pcts.map((p,i) =>
+    `<div style="background:${colors[i]};width:${Math.max(p,1)}%;transition:width .5s" title="${['Muy Insat.','Insat.','Conforme','Satisfecho','Muy Sat.'][i]}: ${p}%"></div>`
+  ).join('');
+  ['s1','s2','s3','s4','s5'].forEach((id,i) => { document.getElementById(id).textContent = pcts[i]+'%'; });
+
+  // ---- NPS ring y barras → delegado a renderNpsSection() ----
+  renderNpsSection();
+
+  // ---- Preguntas por categoría (solo las 2 preguntas específicas, excluye la general usada en el ISG) ----
+  const pregCampos = [
+    { campo:'cal_p1', label:'Competencia, compromiso, comunicaciones', desc:'Competencia técnica, compromiso y claridad en las comunicaciones del equipo asignado.', icon:'groups', ic:{bg:'#eff6ff',color:'#2563eb'} },
+    { campo:'cal_p2', label:'Entregables, tiempos de respuesta',       desc:'Calidad y oportunidad de entregables, solución de conflictos y tiempos de respuesta.',  icon:'fact_check', ic:{bg:'#ecfdf5',color:'#059669'} },
+  ];
+
+  // Usar filas crudas si están disponibles; si no, usar APP.preguntas (configuradas manualmente)
+  const useRawForPreg = APP.rows && APP.rows.length > 0;
+  const pregSentRows = [
+    { key:'muy_sat',  label:'MUY SATIS.',  color:'#22c55e' },
+    { key:'sat',      label:'SATISFECHO.', color:'#84cc16' },
+    { key:'conforme', label:'CONFORME',    color:'#eab308' },
+    { key:'insat',    label:'INSAT.',      color:'#f97316' },
+    { key:'muy_ins',  label:'MUY INSAT.',  color:'#ef4444' },
+  ];
+  const iconMap = ['groups','fact_check','lightbulb','support_agent','star','analytics','verified','thumb_up'];
+  const iconColors = [
+    {bg:'#eff6ff',color:'#2563eb'},{bg:'#ecfdf5',color:'#059669'},{bg:'#fff7ed',color:'#d97706'},
+    {bg:'#fdf4ff',color:'#9333ea'},{bg:'#f0fdf4',color:'#16a34a'},{bg:'#fef2f2',color:'#dc2626'},
+  ];
+
+  let pregCards = [];
+  if (useRawForPreg) {
+    pregCampos.forEach((cfg, idx) => {
+      const d = calcSatisfaccionDistribucion(rowsRender, cfg.campo);
+      pregCards.push({ pregunta: cfg.label, descripcion: cfg.desc, icon: cfg.icon, ic: cfg.ic, ...d });
+    });
+  } else {
+    pregCards = APP.preguntas.map((p, idx) => ({
+      ...p, icon: iconMap[idx % iconMap.length], ic: iconColors[idx % iconColors.length]
+    }));
+  }
+
+  const pg = document.getElementById('preguntasGrid');
+  pg.innerHTML = pregCards.map(p => {
+    const rowsHtml = pregSentRows.map(r => `
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] font-bold text-slate-400 uppercase text-right shrink-0" style="width:66px;">${r.label}</span>
+        <div class="flex-1 rounded overflow-hidden" style="background:#f8fafc;height:20px;">
+          <div style="width:${p[r.key]}%;background:${r.color};height:100%;border-radius:0 4px 4px 0;transition:width .6s ease;"></div>
+        </div>
+        <span class="text-[11px] font-bold text-slate-600 text-right shrink-0" style="width:28px;">${p[r.key]}%</span>
+      </div>`).join('');
+    return `
+    <div class="card p-5">
+      <div class="flex items-start gap-3 mb-5">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background:${p.ic.bg};">
+          <span class="material-symbols-outlined text-[20px]" style="color:${p.ic.color};">${p.icon}</span>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-slate-900 leading-snug">${p.pregunta}</h3>
+          <p class="text-[11px] text-slate-400 mt-0.5 leading-tight">${p.descripcion}</p>
+        </div>
+      </div>
+      <div class="space-y-2.5">${rowsHtml}</div>
+    </div>`;
+  }).join('');
+
+  // ── Benchmarking: calcular desde filas respondidas (filtradas por periodo) ──
+  const benchCampos = [
+    { key:'ref_calidad',      label:'Calidad y oportunidad de entregables' },
+    { key:'ref_comunicacion', label:'Comunicación efectiva' },
+    { key:'ref_competencia',  label:'Competencia y compromiso del equipo' },
+    { key:'ref_innovacion',   label:'Innovación y uso de herramientas digitales' },
+    { key:'ref_costos',       label:'Menores costos' },
+  ];
+
+  // Usar rowsFiltrados (ya aplicado filtro de periodo y solo respondidas)
+  const benchRows = rowsFiltrados.length > 0 ? rowsFiltrados : rowsResp;
+
+  const totalX = benchCampos.reduce((sum, c) => sum + benchRows.filter(r => r[c.key]).length, 0);
+
+  const benchData = benchCampos.map(c => {
+    const n = benchRows.filter(r => r[c.key]).length;
+    const pct = totalX > 0 ? Math.round(n / totalX * 100) : 0;
+    return { label: c.label, n, pct };
+  }).sort((a, b) => b.pct - a.pct); // ordenar de mayor a menor
+
+  const bl = document.getElementById('benchmarkList');
+  if (totalX === 0) {
+    bl.innerHTML = `<p class="text-sm text-slate-400 text-center py-4">Sin datos de características a reforzar en el periodo seleccionado.</p>`;
+  } else {
+    bl.innerHTML = benchData.map(b => `
+      <div class="space-y-1.5">
+        <div class="flex justify-between items-end gap-4">
+          <span class="text-sm font-semibold ${b.pct === 0 ? 'text-slate-400' : 'text-slate-700'}">${b.label}</span>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-sm font-bold text-slate-500">${b.n}</span>
+            <span class="text-sm font-extrabold ${b.pct === 0 ? 'text-slate-400' : 'text-blue-600'} w-10 text-right">${b.pct}%</span>
+          </div>
+        </div>
+        <div class="progress-bar" style="height:14px;">
+          <div class="progress-fill" style="width:${b.pct}%;background:${b.pct === 0 ? '#cbd5e1' : '#0b57d0'};transition:width .6s ease"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+// ===================== ENCUESTAS CRUD =====================
+function renderEncuestas() {
+  const tbody = document.getElementById('encBody');
+  tbody.innerHTML = APP.encuestas.map(e => `
+    <tr class="table-row border-b border-slate-50 transition-colors">
+      <td class="px-4 py-3 text-sm text-slate-400 font-mono">#${e.id}</td>
+      <td class="px-4 py-3 text-sm font-semibold text-slate-800">${e.titulo}</td>
+      <td class="px-4 py-3 text-sm text-slate-600">${e.periodo}</td>
+      <td class="px-4 py-3 text-sm font-bold text-slate-800 text-center">${e.respuestas.toLocaleString()}</td>
+      <td class="px-4 py-3 text-center">
+        <span class="tag ${e.estado==='Activa'?'tag-promotor':'tag-pasivo'}">${e.estado}</span>
+      </td>
+      <td class="px-4 py-3 text-right">
+        <div class="flex items-center justify-end gap-1">
+          <button onclick="editRow('enc',${e.id})" class="p-1.5 text-slate-400 hover:text-blue-600 tooltip" data-tip="Editar">
+            <span class="material-symbols-outlined text-[18px]">edit</span>
+          </button>
+          <button onclick="deleteRow('enc',${e.id})" class="p-1.5 text-slate-400 hover:text-red-500 tooltip" data-tip="Eliminar">
+            <span class="material-symbols-outlined text-[18px]">delete</span>
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ===================== CLIENTES CRUD =====================
+function getNpsStatus(nps) {
+  if (nps >= 9) return 'Promotor';
+  if (nps >= 7) return 'Pasivo';
+  return 'Detractor';
+}
+function statusTag(s) {
+  const cls = s==='Promotor'?'tag-promotor':s==='Pasivo'?'tag-pasivo':'tag-detractor';
+  return `<span class="tag ${cls}">${s}</span>`;
+}
+function satColor(v) {
+  if (v >= 80) return '#10B981';
+  if (v >= 60) return '#3b82f6';
+  if (v >= 40) return '#F59E0B';
+  return '#EF4444';
+}
+
+// Colores y badge para calificación textual de satisfacción
+const CAL_COLORS = {
+  'Muy Satisfecho':   { bg:'#d1fae5', text:'#065f46', dot:'#10b981' },
+  'Satisfecho':       { bg:'#dcfce7', text:'#166534', dot:'#22c55e' },
+  'Conforme':         { bg:'#fef9c3', text:'#854d0e', dot:'#eab308' },
+  'Insatisfecho':     { bg:'#ffedd5', text:'#9a3412', dot:'#f97316' },
+  'Muy Insatisfecho': { bg:'#fee2e2', text:'#991b1b', dot:'#ef4444' },
+};
+function calColor(cal) {
+  return (CAL_COLORS[cal] || CAL_COLORS['Conforme']).dot;
+}
+function calBadge(cal) {
+  const c = CAL_COLORS[cal] || { bg:'#f1f5f9', text:'#64748b', dot:'#94a3b8' };
+  return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;background:${c.bg};color:${c.text};font-size:11px;font-weight:700;white-space:nowrap">
+    <span style="width:7px;height:7px;border-radius:50%;background:${c.dot};flex-shrink:0"></span>
+    ${cal || '—'}
+  </span>`;
+}
+
+function renderClientes(filter='', statusFilter='', empresaFilter='', anioFilter='') {
+  const tbody = document.getElementById('cliBody');
+  let data = APP.clientes;
+
+  if (anioFilter) {
+    data = data.filter(c => (c.fecha_recep||'').slice(0,4) === anioFilter);
+  }
+  if (filter) {
+    const q = filter.toLowerCase();
+    data = data.filter(c =>
+      (c.cliente||'').toLowerCase().includes(q) ||
+      (c.empresa||'').toLowerCase().includes(q) ||
+      (c.proyecto||'').toLowerCase().includes(q) ||
+      (c.num||'').toString().includes(q)
+    );
+  }
+  if (statusFilter) data = data.filter(c => getNpsStatus(c.nps) === statusFilter);
+  if (empresaFilter) data = data.filter(c => (c.empresa||'').toLowerCase() === empresaFilter.toLowerCase());
+
+  tbody.innerHTML = data.map(c => {
+    const st  = getNpsStatus(c.nps);
+    const cal = c.cal_servicio || satNumToText(c.satisfaccion);
+    const col = calColor(cal);
+    const initials = (c.cliente||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const numBadge = c.num ? `<span class="inline-block bg-slate-100 text-slate-500 font-mono font-bold text-[10px] px-1.5 py-0.5 rounded mr-1.5">${c.num}</span>` : '';
+    const encLabel = c.proyecto || c.encuesta || '—';
+    const anioTag  = c.fecha_recep ? `<span class="inline-block bg-blue-50 text-blue-500 font-bold text-[10px] px-1.5 py-0.5 rounded ml-1">${c.fecha_recep.slice(0,4)}</span>` : '';
+    return `
+    <tr class="table-row border-b border-slate-50 transition-colors">
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+            style="background:${col}">${initials}</div>
+          <div>
+            <div class="text-sm font-semibold text-slate-800">${c.cliente||'—'}</div>
+            ${c.empresa ? `<div class="text-[11px] text-slate-400 font-medium">${c.empresa}</div>` : ''}
+          </div>
+        </div>
+      </td>
+      <td class="px-4 py-3 text-center">
+        ${calBadge(cal)}
+      </td>
+      <td class="px-4 py-3 text-center">
+        <span class="inline-flex w-8 h-8 rounded-full items-center justify-center font-bold text-sm" style="background:${col}20;color:${col}">${c.nps ?? '—'}</span>
+      </td>
+      <td class="px-4 py-3">${statusTag(st)}</td>
+      <td class="px-4 py-3">
+        <div class="flex items-center gap-1 flex-wrap">
+          ${numBadge}<span class="text-sm text-slate-600 leading-snug">${encLabel}</span>${anioTag}
+        </div>
+      </td>
+      <td class="px-4 py-3" style="max-width:220px;">
+        ${(c.comentario || '').trim()
+          ? `<span class="text-xs text-slate-600 leading-snug italic" title="${(c.comentario||'').replace(/"/g,'&quot;')}">${c.comentario.length > 60 ? c.comentario.slice(0,60)+'…' : c.comentario}</span>`
+          : `<span class="text-xs text-slate-300">—</span>`}
+      </td>
+      <td class="px-4 py-3 text-right">
+        <div class="flex items-center justify-end gap-1">
+          <button onclick="editRow('cli',${c.id})" class="p-1.5 text-slate-400 hover:text-blue-600">
+            <span class="material-symbols-outlined text-[18px]">edit</span>
+          </button>
+          <button onclick="deleteRow('cli',${c.id})" class="p-1.5 text-slate-400 hover:text-red-500">
+            <span class="material-symbols-outlined text-[18px]">delete</span>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('cliCount').textContent = `Mostrando ${data.length} de ${APP.clientes.length} registros`;
+}
+
+function populateAnioFilter() {
+  const sel = document.getElementById('cliAnioFilter');
+  if (!sel) return;
+  const current = sel.value;
+  const anios = [...new Set(APP.clientes.map(c => (c.fecha_recep||'').slice(0,4)).filter(a => a && a.length===4))].sort().reverse();
+  sel.innerHTML = `<option value="">Todos los años</option>` +
+    anios.map(a => `<option value="${a}" ${a===current?'selected':''}>${a}</option>`).join('');
+}
+
+function populateEmpresaFilter() {
+  const sel = document.getElementById('cliEmpresaFilter');
+  if (!sel) return;
+  const current = sel.value;
+  const empresas = [...new Set(APP.clientes.map(c => c.empresa).filter(Boolean))].sort();
+  sel.innerHTML = `<option value="">Todas las empresas (${empresas.length})</option>` +
+    empresas.map(e => `<option value="${e}" ${e===current?'selected':''}>${e}</option>`).join('');
+}
+
+function applyCliFilters() {
+  const search  = document.getElementById('cliSearchInput')?.value || '';
+  const empresa = document.getElementById('cliEmpresaFilter')?.value || '';
+  const status  = document.getElementById('cliStatusFilter')?.value || '';
+  const anio    = document.getElementById('cliAnioFilter')?.value || '';
+  renderClientes(search, status, empresa, anio);
+}
+
+function clearCliFilters() {
+  const s  = document.getElementById('cliSearchInput');   if (s)  s.value  = '';
+  const e  = document.getElementById('cliEmpresaFilter'); if (e)  e.value  = '';
+  const st = document.getElementById('cliStatusFilter');  if (st) st.value = '';
+  const a  = document.getElementById('cliAnioFilter');    if (a)  a.value  = '';
+  renderClientes();
+}
+
+function filterByStatus(val) {
+  applyCliFilters();
+}
+
+// ===================== PREGUNTAS CRUD =====================
+function renderPreguntas() {
+  const tbody = document.getElementById('pregBody');
+  tbody.innerHTML = APP.preguntas.map(p => `
+    <tr class="table-row border-b border-slate-50 transition-colors">
+      <td class="px-4 py-3 text-slate-400 text-sm font-mono">${p.id}</td>
+      <td class="px-4 py-3 text-sm font-semibold text-slate-800 max-w-[180px]">${p.pregunta}</td>
+      <td class="px-4 py-3 text-xs text-slate-500 max-w-[200px]">${p.descripcion}</td>
+      <td class="px-4 py-3 text-center"><span class="font-bold text-emerald-600 text-sm">${p.muy_sat}%</span></td>
+      <td class="px-4 py-3 text-center"><span class="font-bold text-lime-600 text-sm">${p.sat}%</span></td>
+      <td class="px-4 py-3 text-center"><span class="font-bold text-yellow-600 text-sm">${p.conforme}%</span></td>
+      <td class="px-4 py-3 text-center"><span class="font-bold text-orange-600 text-sm">${p.insat}%</span></td>
+      <td class="px-4 py-3 text-center"><span class="font-bold text-red-600 text-sm">${p.muy_ins}%</span></td>
+      <td class="px-4 py-3 text-right">
+        <div class="flex items-center justify-end gap-1">
+          <button onclick="editRow('preg',${p.id})" class="p-1.5 text-slate-400 hover:text-blue-600">
+            <span class="material-symbols-outlined text-[18px]">edit</span>
+          </button>
+          <button onclick="deleteRow('preg',${p.id})" class="p-1.5 text-slate-400 hover:text-red-500">
+            <span class="material-symbols-outlined text-[18px]">delete</span>
+          </button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ===================== MODALS =====================
+const modalConfigs = {
+  enc: {
+    title: 'Nueva Encuesta',
+    fields: () => `
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Título</label>
+        <input id="mf-titulo" class="input-field" placeholder="Encuesta Q2 2024"></div>
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Período</label>
+        <input id="mf-periodo" class="input-field" placeholder="Abr 2024 - Jun 2024"></div>
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Respuestas</label>
+        <input id="mf-respuestas" type="number" class="input-field" placeholder="0"></div>
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Estado</label>
+        <select id="mf-estado" class="input-field"><option>Activa</option><option>Cerrada</option><option>Borrador</option></select></div>
+    `,
+    save: () => {
+      const t = v('mf-titulo'), p = v('mf-periodo'), r = parseInt(v('mf-respuestas'))||0, e = v('mf-estado');
+      if (!t) return alert('Ingresa un título');
+      if (editingId) {
+        const rec = APP.encuestas.find(x=>x.id===editingId);
+        if (rec) { rec.titulo=t; rec.periodo=p; rec.respuestas=r; rec.estado=e; }
+      } else {
+        APP.encuestas.push({ id: APP.nextId.enc++, titulo:t, periodo:p, respuestas:r, estado:e });
+      }
+      renderEncuestas(); renderDashboard();
+    },
+    populate: (id) => {
+      const r = APP.encuestas.find(x=>x.id===id);
+      sv('mf-titulo', r.titulo); sv('mf-periodo', r.periodo); sv('mf-respuestas', r.respuestas); sv('mf-estado', r.estado);
+    }
+  },
+  cli: {
+    title: 'Agregar Cliente',
+    fields: () => `
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Nombre del Cliente</label>
+        <input id="mf-cliente" class="input-field" placeholder="Nombre completo"></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-sm font-semibold text-slate-700 mb-1">Satisfacción %</label>
+          <input id="mf-satisfaccion" type="number" min="0" max="100" class="input-field" placeholder="0-100"></div>
+        <div><label class="block text-sm font-semibold text-slate-700 mb-1">NPS Score (0-10)</label>
+          <input id="mf-nps" type="number" min="0" max="10" class="input-field" placeholder="0-10"></div>
+      </div>
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Encuesta</label>
+        <select id="mf-encuesta" class="input-field">${APP.encuestas.map(e=>`<option>${e.titulo}</option>`).join('')}</select></div>
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Comentarios</label>
+        <textarea id="mf-comentario" class="input-field" rows="2" placeholder="¿Qué aspectos destacaría y qué otros podríamos mejorar?"></textarea></div>
+    `,
+    save: () => {
+      const cl=v('mf-cliente'), sat=parseInt(v('mf-satisfaccion'))||0, nps=parseInt(v('mf-nps'))||0, enc=v('mf-encuesta'), com=v('mf-comentario');
+      if (!cl) return alert('Ingresa el nombre del cliente');
+      if (editingId) {
+        const rec = APP.clientes.find(x=>x.id===editingId);
+        if (rec) { rec.cliente=cl; rec.satisfaccion=sat; rec.nps=nps; rec.encuesta=enc; rec.comentario=com; }
+      } else {
+        APP.clientes.push({ id: APP.nextId.cli++, cliente:cl, satisfaccion:sat, nps, encuesta:enc, comentario:com, fecha_recep:'', empresa:'', num:'', proyecto:'' });
+      }
+      renderClientes(); renderDashboard();
+    },
+    populate: (id) => {
+      const r = APP.clientes.find(x=>x.id===id);
+      sv('mf-cliente', r.cliente); sv('mf-satisfaccion', r.satisfaccion); sv('mf-nps', r.nps); sv('mf-encuesta', r.encuesta); sv('mf-comentario', r.comentario||'');
+    }
+  },
+  preg: {
+    title: 'Nueva Pregunta',
+    fields: () => `
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Pregunta</label>
+        <input id="mf-pregunta" class="input-field" placeholder="Título de la pregunta"></div>
+      <div><label class="block text-sm font-semibold text-slate-700 mb-1">Descripción</label>
+        <textarea id="mf-descripcion" class="input-field" rows="2" placeholder="Descripción detallada"></textarea></div>
+      <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Porcentajes de respuesta</p>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="block text-xs font-semibold text-emerald-600 mb-1">Muy Satisfecho %</label><input id="mf-muy_sat" type="number" min="0" max="100" class="input-field" value="0"></div>
+        <div><label class="block text-xs font-semibold text-lime-600 mb-1">Satisfecho %</label><input id="mf-sat" type="number" min="0" max="100" class="input-field" value="0"></div>
+        <div><label class="block text-xs font-semibold text-yellow-600 mb-1">Conforme %</label><input id="mf-conforme" type="number" min="0" max="100" class="input-field" value="0"></div>
+        <div><label class="block text-xs font-semibold text-orange-600 mb-1">Insatisfecho %</label><input id="mf-insat" type="number" min="0" max="100" class="input-field" value="0"></div>
+        <div><label class="block text-xs font-semibold text-red-600 mb-1">Muy Insatisfecho %</label><input id="mf-muy_ins" type="number" min="0" max="100" class="input-field" value="0"></div>
+      </div>
+    `,
+    save: () => {
+      const pr=v('mf-pregunta'), desc=v('mf-descripcion');
+      if (!pr) return alert('Ingresa la pregunta');
+      const data = { pregunta:pr, descripcion:desc, muy_sat:parseInt(v('mf-muy_sat'))||0, sat:parseInt(v('mf-sat'))||0, conforme:parseInt(v('mf-conforme'))||0, insat:parseInt(v('mf-insat'))||0, muy_ins:parseInt(v('mf-muy_ins'))||0 };
+      if (editingId) {
+        const rec = APP.preguntas.find(x=>x.id===editingId);
+        if (rec) Object.assign(rec, data);
+      } else {
+        APP.preguntas.push({ id: APP.nextId.preg++, ...data });
+      }
+      renderPreguntas();
+    },
+    populate: (id) => {
+      const r = APP.preguntas.find(x=>x.id===id);
+      sv('mf-pregunta', r.pregunta); sv('mf-descripcion', r.descripcion);
+      sv('mf-muy_sat', r.muy_sat); sv('mf-sat', r.sat); sv('mf-conforme', r.conforme);
+      sv('mf-insat', r.insat); sv('mf-muy_ins', r.muy_ins);
+    }
+  }
+};
+
+function v(id) { return document.getElementById(id)?.value || ''; }
+function sv(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
+
+function openModal(type, id=null) {
+  currentModal = type;
+  editingId = id;
+  const cfg = modalConfigs[type];
+  document.getElementById('modalTitle').textContent = id ? 'Editar '+cfg.title.replace('Nueva ','').replace('Agregar ','') : cfg.title;
+  document.getElementById('modalBody').innerHTML = cfg.fields();
+  if (id) cfg.populate(id);
+  document.getElementById('modalOverlay').classList.remove('hidden');
+}
+function closeModal() {
+  document.getElementById('modalOverlay').classList.add('hidden');
+  currentModal = null; editingId = null;
+}
+function saveModal() {
+  if (currentModal) { modalConfigs[currentModal].save(); closeModal(); }
+}
+
+function editRow(type, id) { openModal(type, id); }
+
+function deleteRow(type, id) {
+  document.getElementById('confirmMsg').textContent = '¿Seguro que deseas eliminar este registro? Esta acción no se puede deshacer.';
+  document.getElementById('confirmOverlay').classList.remove('hidden');
+  document.getElementById('confirmOkBtn').onclick = () => {
+    if (type==='enc') APP.encuestas = APP.encuestas.filter(x=>x.id!==id);
+    if (type==='cli') APP.clientes = APP.clientes.filter(x=>x.id!==id);
+    if (type==='preg') APP.preguntas = APP.preguntas.filter(x=>x.id!==id);
+    closeConfirm();
+    if (type==='enc') renderEncuestas();
+    if (type==='cli') renderClientes();
+    if (type==='preg') renderPreguntas();
+    renderDashboard();
+  };
+}
+function closeConfirm() { document.getElementById('confirmOverlay').classList.add('hidden'); }
+
+// ===================== TABLE FILTER =====================
+function filterTable(tableId, query) {
+  const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+  const q = query.toLowerCase();
+  rows.forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function globalSearch(q) {
+  if (!q) return;
+  // Just highlight current section
+}
+
+// ===================== NPS TAB =====================
+function setNpsTab(el, tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  APP.npsTab = tab;
+  renderNpsSection();
+}
+
+function renderNpsSection() {
+  const RESP_EXACTOS = new Set(['respondida','recibida','completada','completed']);
+  const allRows = APP.rows && APP.rows.length ? APP.rows : APP.clientes.map(c => ({
+    cal_servicio: satNumToText(c.satisfaccion), nps: c.nps,
+    estado: 'Respondida', fecha_recep: ''
+  }));
+
+  const isoMes  = iso => iso ? String(iso).slice(0, 7) : null;
+  const isoAnio = iso => iso ? String(iso).slice(0, 4) : null;
+  let base = allRows.filter(r => RESP_EXACTOS.has((r.estado||'').toLowerCase().trim()));
+
+  if (APP.filtroPeriodo !== 'all') {
+    if (APP.filtroPeriodo.length === 4) {
+      base = base.filter(r => isoAnio(r.fecha_recep) === APP.filtroPeriodo);
+    } else {
+      base = base.filter(r => isoMes(r.fecha_recep) === APP.filtroPeriodo);
+    }
+  }
+
+  // Calcular ventana de tiempo actual y anterior
+  const hoy = new Date();
+  const msTab = { '30d': 30*864e5, 'q': 90*864e5, 'y': 365*864e5 };
+  const ventana = msTab[APP.npsTab] || msTab['30d'];
+
+  const cutoffActual   = new Date(hoy.getTime() - ventana);
+  const cutoffAnterior = new Date(hoy.getTime() - ventana * 2);
+
+  const conFecha = base.filter(r => r.fecha_recep && r.fecha_recep.length >= 7);
+  const sinFecha = base.filter(r => !r.fecha_recep || r.fecha_recep.length < 7);
+
+  let rowsActual, rowsAnterior;
+  if (conFecha.length > 0) {
+    rowsActual   = conFecha.filter(r => new Date(r.fecha_recep) >= cutoffActual);
+    rowsAnterior = conFecha.filter(r => new Date(r.fecha_recep) >= cutoffAnterior && new Date(r.fecha_recep) < cutoffActual);
+    if (rowsActual.length === 0) rowsActual = base; // fallback
+  } else {
+    rowsActual   = base;
+    rowsAnterior = [];
+  }
+
+  const npsActual   = calcNPS(rowsActual);
+  const npsAnterior = rowsAnterior.length > 0 ? calcNPS(rowsAnterior) : null;
+  const n = rowsActual.length;
+
+  // ── Variación NPS ──────────────────────────────────────────────────────────
+  const varEl = document.getElementById('npsVariacion');
+  if (varEl) {
+    if (npsAnterior !== null && rowsAnterior.length > 0) {
+      const diff = npsActual.nps - npsAnterior.nps;
+      const sube = diff >= 0;
+      const igual = diff === 0;
+      varEl.style.removeProperty('display');
+      varEl.className = `text-xs font-bold flex items-center gap-1 mt-1 ${igual ? 'text-slate-400' : sube ? 'text-emerald-600' : 'text-red-500'}`;
+      varEl.innerHTML = `<span class="material-symbols-outlined text-[14px]">${igual ? 'remove' : sube ? 'trending_up' : 'trending_down'}</span>
+        ${sube && !igual ? '+' : ''}${diff} vs periodo anterior`;
+    } else {
+      // Sin periodo anterior para comparar
+      varEl.style.removeProperty('display');
+      varEl.className = 'text-xs font-bold flex items-center gap-1 mt-1 text-slate-400';
+      varEl.innerHTML = `<span class="material-symbols-outlined text-[14px]">info</span>sin periodo anterior`;
+    }
+  }
+
+  // ── Ring ───────────────────────────────────────────────────────────────────
+  const npsNorm = Math.max(0, Math.min(100, (npsActual.nps + 100) / 2));
+  const circ = 2 * Math.PI * 40;
+  const dash = (npsNorm / 100) * circ;
+  document.getElementById('npsRing').setAttribute('stroke-dasharray', `${dash.toFixed(1)} ${circ.toFixed(1)}`);
+  document.getElementById('npsRingVal').textContent = npsActual.nps;
+
+  // ── Barras categorías ──────────────────────────────────────────────────────
+  document.getElementById('prom-pct').textContent = npsActual.promotores + '%';
+  document.getElementById('prom-bar').style.width  = npsActual.promotores + '%';
+  document.getElementById('pas-pct').textContent   = npsActual.pasivos + '%';
+  document.getElementById('pas-bar').style.width   = npsActual.pasivos + '%';
+  document.getElementById('det-pct').textContent   = npsActual.detractores + '%';
+  document.getElementById('det-bar').style.width   = npsActual.detractores + '%';
+  document.getElementById('npsN').textContent      = n.toLocaleString();
+
+  // ── Distribución escala 0-10 ───────────────────────────────────────────────
+  const scaleCount = Array(11).fill(0);
+  rowsActual.forEach(r => { const v = Number(r.nps); if (!isNaN(v) && v >= 0 && v <= 10) scaleCount[v]++; });
+  const scaleMax = Math.max(...scaleCount, 1);
+  const scaleColors = ['#ef4444','#ef4444','#f97316','#f97316','#eab308','#eab308','#84cc16','#84cc16','#10b981','#059669','#047857'];
+  document.getElementById('scaleBars').innerHTML = scaleCount.map((c, i) =>
+    `<div class="flex-1 rounded-t-sm transition-all" style="background:${scaleColors[i]};height:${Math.max(4,Math.round(c/scaleMax*100))}%" title="${i}: ${c} resp."></div>`
+  ).join('');
+
+  // ── Subtítulo ──────────────────────────────────────────────────────────────
+  const labels = { '30d':'Últimos 30 días', 'q':'Último trimestre', 'y':'Último año' };
+  const subEl = document.getElementById('npsSubtitle');
+  if (subEl) subEl.textContent = `${labels[APP.npsTab]} · ${n} respuesta${n!==1?'s':''} analizadas`;
+}
+
+// ===================== EXCEL IMPORT =====================
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+
+function handleFile(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+
+  if (ext === 'csv') {
+    reader.onload = e => parseCSV(e.target.result, file.name);
+    reader.readAsText(file);
+  } else {
+    reader.onload = e => parseExcel(e.target.result, file.name);
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+function parseExcel(buffer, fileName) {
+  const wb = XLSX.read(buffer, { type: 'array', raw: true });
+  const sheetIdx = wb.SheetNames.findIndex(s => s.toLowerCase() === 'encuestas');
+  if (sheetIdx < 0) { alert('No se encontró la hoja "Encuestas".'); return; }
+
+  const ws = wb.Sheets[wb.SheetNames[sheetIdx]];
+
+  // Lee una celda → string limpio
+  const cv = (col, row) => {
+    const cell = ws[col + row];
+    if (!cell || cell.v === null || cell.v === undefined) return '';
+    if (cell.t === 's') return String(cell.v).replace(/\xa0/g, '').trim();
+    if (cell.w !== undefined) return String(cell.w).trim();
+    return String(cell.v).trim();
+  };
+
+  // Convierte serial de fecha Excel → 'YYYY-MM-DD'
+  // IMPORTANTE: con raw:true, cell.w puede tener año de 2 dígitos ('4/21/26')
+  // que JS interpreta como 1926. Siempre usar el serial numérico cell.v.
+  // Fórmula: (serial - 25569) * 86400000 ms desde epoch 1970-01-01
+  const cvDate = (col, row) => {
+    const cell = ws[col + row];
+    if (!cell || cell.v === null || cell.v === undefined) return '';
+    const serial = Number(cell.v);
+    if (isNaN(serial) || serial < 1) return '';
+    const ms = Math.round((serial - 25569) * 86400000);
+    const d  = new Date(ms);
+    if (isNaN(d.getTime())) return '';
+    // Formatear como YYYY-MM-DD en UTC para evitar desfase de timezone
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2,'0');
+    const day = String(d.getUTCDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // Columnas FIJAS por letra Excel (no cambian con el formato)
+  // A=CLIENTE  B=Nº  C=PROYECTO  D=RESPONSABLE  E=ENCUESTADO
+  // F=CARGO    G=CORREO  H=TELÉFONO  I=FECHA ENVÍO  J=SEGUIMIENTO
+  // K=ESTADO   L=FECHA RECEPCIÓN  M=SECTOR  N=ALCANCE
+  // O=PG(¿Cómo calificaría?)  P=P1(Competencia)  Q=P2(Entregables)
+  // R=Ref Calidad  S=Ref Comunicación  T=Ref Competencia
+  // U=Ref Innovación  V=Ref Costos  W=NPS
+
+  // Encontrar primera fila con 'CLIENTE' en col A
+  let hRow = -1;
+  for (let r = 1; r <= 20; r++) {
+    if (cv('A', r).toUpperCase() === 'CLIENTE') { hRow = r; break; }
+  }
+  if (hRow < 0) { alert('No se encontró la fila de encabezado (columna CLIENTE).'); return; }
+
+  // Detectar si la fila inmediata al header es una fila de sub-encabezados
+  // (col A vacía pero cols R-V tienen texto descriptivo, no datos)
+  let dataStart = hRow + 1;
+  const nextRowA = cv('A', hRow + 1);
+  const nextRowR = cv('R', hRow + 1);
+  const nextRowK = cv('K', hRow + 1).toLowerCase();
+  // Si A está vacía Y (R tiene texto largo O K no tiene estado válido) → es sub-encabezado
+  const ESTADOS_VALIDOS = new Set(['respondida','enviada','no respondida','recibida','pendiente','completada']);
+  if (!nextRowA && (nextRowR.length > 5 || !ESTADOS_VALIDOS.has(nextRowK))) {
+    dataStart = hRow + 2; // saltar fila de sub-encabezados
+    console.log('[SIGRAL] Detectada fila de sub-encabezados en fila ' + (hRow+1) + ', datos desde fila ' + dataStart);
+  }
+
+  // Detectar última fila con datos en col A
+  let lastRow = dataStart;
+  for (let r = dataStart; r <= 500; r++) {
+    if (cv('A', r) !== '') lastRow = r; else if (r > lastRow + 3) break;
+  }
+
+  console.log('[SIGRAL] Header fila=' + hRow + ' | dataStart=' + dataStart + ' | lastRow=' + lastRow);
+
+  // Normalizar texto de calificación
+  const CAL = {
+    'muy satisfecho':'Muy Satisfecho', 'satisfecho':'Satisfecho',
+    'conforme':'Conforme', 'insatisfecho':'Insatisfecho',
+    'muy insatisfecho':'Muy Insatisfecho'
+  };
+  const cal = s => CAL[s.toLowerCase()] || s || null;
+
+  const rows = [];
+  for (let r = dataStart; r <= lastRow; r++) {
+    const cliente = cv('A', r);
+    if (!cliente) continue;
+    const estado = cv('K', r).replace(/\n/g,' ').trim();
+    const row = {
+      cliente,
+      num:              cv('B', r),
+      proyecto:         cv('C', r),
+      responsable:      cv('D', r),
+      encuestado:       cv('E', r),
+      cargo:            cv('F', r),
+      correo:           cv('G', r),
+      telefono:         cv('H', r),
+      fecha_envio:      cvDate('I', r),
+      seguimiento:      cvDate('J', r),
+      estado,
+      fecha_recep:      cvDate('L', r),
+      sector:           cv('M', r),
+      alcance:          cv('N', r),
+      cal_servicio:     cal(cv('O', r)),  // PG
+      cal_p1:           cal(cv('P', r)),  // P1
+      cal_p2:           cal(cv('Q', r)),  // P2
+      ref_calidad:      cv('R', r).toUpperCase() === 'X',
+      ref_comunicacion: cv('S', r).toUpperCase() === 'X',
+      ref_competencia:  cv('T', r).toUpperCase() === 'X',
+      ref_innovacion:   cv('U', r).toUpperCase() === 'X',
+      ref_costos:       cv('V', r).toUpperCase() === 'X',
+      nps:              parseFloat(cv('W', r)) || null,
+      comentario:       cv('X', r),
+    };
+    console.log('[' + r + '] ' + row.cliente + '|' + row.num + '|' + row.estado + '|PG=' + row.cal_servicio + '|P1=' + row.cal_p1 + '|P2=' + row.cal_p2 + '|NPS=' + row.nps);
+    rows.push(row);
+  }
+
+  showPreviewSigral(rows, fileName);
+}
+
+function showPreviewSigral(rows, fileName) {
+  const RESP_OK = new Set(['respondida','recibida','completada','completed']);
+  const isResp  = r => RESP_OK.has((r.estado||'').toLowerCase());
+  const respondidas = rows.filter(isResp).length;
+
+  pendingImport = { type:'sigral', rows };
+
+  const badge = e => {
+    const ok = RESP_OK.has((e||'').toLowerCase());
+    const bg = ok ? '#d1fae5' : '#fee2e2';
+    const co = ok ? '#065f46' : '#991b1b';
+    return '<span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:'+bg+';color:'+co+'">'+(e||'—')+'</span>';
+  };
+
+  const cols   = ['num','cliente','proyecto','estado','cal_servicio','cal_p1','cal_p2','nps'];
+  const labels = ['Nº','Empresa','Proyecto','Estado Encuesta','PG - Satisfacción Gral.','P1 - Competencia','P2 - Entregables','NPS'];
+
+  const tableRows = rows.map(r =>
+    '<tr class="border-b border-slate-100 '+(isResp(r)?'':'bg-red-50')+'">'
+    + cols.map(k => '<td class="border border-slate-100 px-3 py-1.5 text-slate-700 text-xs whitespace-nowrap">'
+      + (k==='estado' ? badge(r[k]) : (r[k] !== null && r[k] !== undefined && r[k] !== '' ? r[k] : '—'))
+      + '</td>').join('')
+    + '</tr>'
+  ).join('');
+
+  const html =
+    '<div class="mb-3 flex items-center gap-3 flex-wrap">'
+    + '<span class="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-1 rounded"><span class="material-symbols-outlined text-[14px]">check_circle</span>&nbsp;Formato SIGRAL detectado</span>'
+    + '<span class="text-xs font-semibold text-slate-600">Emitidas:&nbsp;<b>'+rows.length+'</b></span>'
+    + '<span class="text-xs font-semibold text-emerald-700">Respondidas:&nbsp;<b>'+respondidas+'</b></span>'
+    + '<span class="text-xs font-semibold text-red-600">Pendientes:&nbsp;<b>'+(rows.length-respondidas)+'</b></span>'
+    + '</div>'
+    + '<div class="overflow-x-auto custom-scrollbar"><table class="text-xs border-collapse" style="min-width:700px">'
+    + '<thead><tr>'+labels.map(l=>'<th class="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-bold text-slate-500 uppercase whitespace-nowrap">'+l+'</th>').join('')+'</tr></thead>'
+    + '<tbody>'+tableRows+'</tbody></table></div>';
+
+  document.getElementById('previewContent').innerHTML = html;
+  document.getElementById('previewSection').style.display = '';
+  document.getElementById('fileStatusMsg').textContent
+    = '✓ "'+fileName+'" · '+rows.length+' emitidas · '+respondidas+' respondidas · '+(rows.length-respondidas)+' pendientes';
+  document.getElementById('fileStatus').classList.remove('hidden');
+}
+
+function applyImport() {
+  if (!pendingImport) return;
+
+  if (pendingImport.type === 'sigral') {
+    const rows = pendingImport.rows;
+    APP.rows = rows; // todas las filas crudas para cálculos de dashboard
+
+    // Solo las respondidas van a la tabla Clientes
+    const RESP_EXACTOS = new Set(['respondida','recibida','completada','completed']);
+    const rowsResp = rows.filter(r => RESP_EXACTOS.has((r.estado||'').toLowerCase().trim()));
+
+    APP.clientes = rowsResp.map((r, i) => ({
+      id: i+1,
+      cliente: r.encuestado || r.cliente,
+      empresa: r.cliente,
+      num: r.num,
+      proyecto: r.proyecto,
+      satisfaccion: satTextToNum(r.cal_servicio),
+      cal_servicio: r.cal_servicio || '',
+      nps: r.nps ?? 0,
+      encuesta: r.proyecto || r.cliente,
+      estado_enc: r.estado,
+      sector: r.sector,
+      alcance: r.alcance,
+      responsable: r.responsable,
+      fecha_recep: r.fecha_recep || '',
+      comentario:  r.comentario  || '',
+    }));
+    APP.nextId.cli = APP.clientes.length + 1;
+
+    // Encuesta: respondidas en el numerador, emitidas en el denominador
+    const fechas = rows.map(r=>r.fecha_envio).filter(Boolean).sort();
+    const periodo = fechas.length ? `${fechas[0]} — ${fechas[fechas.length-1]}` : 'Importado';
+    APP.encuestas = [{ id:1, titulo: 'Importado desde Excel', periodo, respuestas: rowsResp.length, estado:'Activa' }];
+
+  } else {
+    // Formato genérico (compatibilidad hacia atrás)
+    Object.entries(pendingImport.data).forEach(([sheet, rows]) => {
+      const nameMap = { clientes:'clientes', encuestas:'encuestas', preguntas:'preguntas' };
+      const target = nameMap[sheet];
+      if (!target || !rows.length) return;
+      rows.forEach(row => {
+        const keys = Object.fromEntries(Object.entries(row).map(([k,v]) => [k.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,''), v]));
+        if (target==='clientes') {
+          const sat = parseInt(keys.satisfaccion ?? keys.sat ?? 0);
+          const nps = parseInt(keys.nps ?? keys.nps_score ?? 0);
+          const nombre = keys.cliente ?? keys.encuestado ?? keys.nombre ?? '';
+          if (nombre) APP.clientes.push({ id: APP.nextId.cli++, cliente:String(nombre), satisfaccion:sat, nps, encuesta:keys.encuesta??'' });
+        }
+      });
+    });
+  }
+
+  pendingImport = null;
+  APP.filtroPeriodo = 'all'; // resetear filtro al importar nuevos datos
+  document.getElementById('previewSection').style.display = 'none';
+  populateAnioFilter();
+  populateEmpresaFilter();
+  renderDashboard();
+  renderClientes();
+  renderEncuestas();
+  alert('✓ Datos importados y calculados automáticamente');
+}
+
+function satTextToNum(txt) {
+  const m = {'Muy Satisfecho':95,'Satisfecho':80,'Conforme':60,'Insatisfecho':35,'Muy Insatisfecho':15};
+  return m[txt] ?? 50;
+}
+
+function cancelImport() {
+  pendingImport = null;
+  document.getElementById('previewSection').style.display = 'none';
+  document.getElementById('fileStatus').classList.add('hidden');
+  document.getElementById('fileInput').value = '';
+}
+
+function loadSampleData() {
+  APP.encuestas = [
+    { id:1, titulo:'Encuesta Q3 2023', periodo:'Jul 2023 - Sep 2023', respuestas:412, estado:'Cerrada' },
+    { id:2, titulo:'Encuesta Q4 2023', periodo:'Oct 2023 - Dic 2023', respuestas:580, estado:'Cerrada' },
+    { id:3, titulo:'Encuesta Q1 2024', periodo:'Ene 2024 - Mar 2024', respuestas:668, estado:'Activa' },
+  ];
+  APP.clientes = [
+    { id:1, cliente:'Luis Fernandez',      empresa:'BCP',      num:22978, proyecto:'AGENCIA BCP TOTTUS PUENTE PIEDRA',      satisfaccion:80, nps:7, encuesta:'AGENCIA BCP TOTTUS PUENTE PIEDRA',      fecha_recep:'', comentario:'' },
+    { id:2, cliente:'Teresa Ilay',         empresa:'BCP',      num:22964, proyecto:'AGENCIA BCP HUANCAYO',                  satisfaccion:35, nps:5, encuesta:'AGENCIA BCP HUANCAYO',                  fecha_recep:'', comentario:'' },
+    { id:3, cliente:'Gabriel Mendoza',     empresa:'CENCOSUD', num:22960, proyecto:'DIAGNÓSTICO 05 LOCALES CENCOSUD',       satisfaccion:35, nps:5, encuesta:'DIAGNÓSTICO 05 LOCALES CENCOSUD',       fecha_recep:'', comentario:'' },
+    { id:4, cliente:'Gabriel Mendoza',     empresa:'CENCOSUD', num:22959, proyecto:'DIAGNÓSTICO 08 LOCALES CENCOSUD',       satisfaccion:60, nps:6, encuesta:'DIAGNÓSTICO 08 LOCALES CENCOSUD',       fecha_recep:'', comentario:'' },
+    { id:5, cliente:'Rómulo Gamarra',      empresa:'UPC',      num:22965, proyecto:'AMPLIACIÓN PABELLÓN D UPC SAN MIGUEL',  satisfaccion:95, nps:9, encuesta:'AMPLIACIÓN PABELLÓN D UPC SAN MIGUEL',  fecha_recep:'', comentario:'' },
+    { id:6, cliente:'Alvaro Arescurenaga', empresa:'UPC',      num:22974, proyecto:'CAMBIO TECNOLOGÍA HVAC UPC MONTERRICO', satisfaccion:95, nps:9, encuesta:'CAMBIO TECNOLOGÍA HVAC UPC MONTERRICO', fecha_recep:'', comentario:'' },
+    { id:7, cliente:'Corporación Andina',  empresa:'INNOVA S', num:22969, proyecto:'INSPECCIÓN ESTRUCTURAL 06 COLEGIOS',    satisfaccion:95, nps:9, encuesta:'INSPECCIÓN ESTRUCTURAL 06 COLEGIOS',    fecha_recep:'', comentario:'' },
+    { id:8, cliente:'Juan Carlos Sanz',    empresa:'UPN',      num:22958, proyecto:'AMPLIACIÓN PAB. F UPN CAJAMARCA',       satisfaccion:60, nps:6, encuesta:'AMPLIACIÓN PAB. F UPN CAJAMARCA',       fecha_recep:'', comentario:'' },
+  ];
+  APP.preguntas = [
+    { id:1, pregunta:'Competencia, compromiso, comunicaciones', descripcion:'Competencia técnica, compromiso y claridad en comunicaciones del equipo asignado', muy_sat:15, sat:45, conforme:25, insat:10, muy_ins:5 },
+    { id:2, pregunta:'Entregables, tiempos de respuesta', descripcion:'Calidad y oportunidad de entregables, solución de conflictos y tiempos de respuesta', muy_sat:28, sat:32, conforme:22, insat:12, muy_ins:6 },
+  ];
+  APP.rows = [];
+  APP.nextId = { enc:4, cli:9, preg:3 };
+  populateAnioFilter();
+  populateEmpresaFilter();
+  renderDashboard();
+  renderClientes();
+  alert('✓ Datos de ejemplo cargados');
+}
+
+// ===================== EXPORT =====================
+function exportData() {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(APP.clientes), 'Clientes');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(APP.encuestas), 'Encuestas');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(APP.preguntas), 'Preguntas');
+  XLSX.writeFile(wb, 'SIGRAL_Dashboard_' + new Date().toISOString().slice(0,10) + '.xlsx');
+}
+
+// ===================== PERIODO FILTER =====================
+function toggleAnio(anio) {
+  APP.filtroAnioExpand = APP.filtroAnioExpand === anio ? null : anio;
+  renderDashboard();
+}
+
+function togglePeriodoMenu() {
+  const menu = document.getElementById('periodoMenu');
+  const chevron = document.getElementById('periodoChevron');
+  const isOpen = !menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', isOpen);
+  chevron.textContent = isOpen ? 'expand_more' : 'expand_less';
+}
+
+function setPeriodo(val) {
+  APP.filtroPeriodo = val;
+  if (val === 'all') APP.filtroAnioExpand = null;
+  document.getElementById('periodoMenu').classList.add('hidden');
+  document.getElementById('periodoChevron').textContent = 'expand_more';
+  renderDashboard();
+}
+
+// Cerrar menú al hacer click fuera
+document.addEventListener('click', e => {
+  const wrapper = document.getElementById('periodoWrapper');
+  if (wrapper && !wrapper.contains(e.target)) {
+    const menu = document.getElementById('periodoMenu');
+    if (menu) { menu.classList.add('hidden'); document.getElementById('periodoChevron').textContent = 'expand_more'; }
+  }
+});
+
+// ===================== INIT =====================
+renderDashboard();
+</script>
+</body>
+</html>
